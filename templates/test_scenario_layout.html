@@ -1,0 +1,164 @@
+{% if not to_render -%}
+    {% raise "No context to render!" %}
+{% endif -%}
+
+{% set default_page_title = "Summary Test Report" -%}
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+{% autoescape true -%}
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="Content-type" content="text/html;charset=UTF-8"/>
+    {% if 'page_title' in to_render -%}
+    <title>{{ to_render['page_title'] -}}</title>
+    {% else -%}
+    <title>{{ default_page_title -}}</title>
+    {%endif -%}
+</head>
+
+<body lang="EN-US" link="blue" vlink="purple">
+<hr/>
+<table width="100%" border="0" bgcolor="#f9b500">
+    <tr>
+        <td>
+            <font face="Arial" size="+2">
+                {% if 'summary_info_table_header_title' in to_render -%}
+                <b>{{ to_render['summary_info_table_header_title'] -}}</b>
+                {% else -%}
+                <b>Unknown Platform Summary Test Report</b>
+                {% endif -%}
+            </font>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <font face="Arial" size="+0">
+                {% if 'report_date' in to_render -%}
+                Date: {{ to_render['report_date'] -}}
+                {% else -%}
+                Date: UNKNOWN
+                {% endif -%}
+            </font>
+        </td>
+        <td>
+            <font face="Arial" size="+1">Company Confidential</font>
+        </td>
+    </tr>
+</table>
+
+<hr/>
+<p align="center">
+    <font face="Arial" size="-1">
+        {{ to_render['copyright'] -}}
+    </font>
+</p>
+<hr/>
+
+<table width="100%" border="0">
+    <tr bgcolor="orange">
+        <td>
+            <font face="Arial" size="+0">Description</font>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <font face="Arial" size="+0">This document contains  <{{ to_render['test_name'].split(".")[0].upper() -}} > summary test results</font>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <font face="Arial" size="-1">Report generated with: [ {{ to_render['tool'] }}: {{ to_render['tool_version'] }} ]</font>
+        </td>
+    </tr>
+</table>
+
+<hr/>
+<table width="100%" border="0" cellpadding="2" cellspacing="0">
+    <tr>
+        <td valign="top">
+            <ul>
+                <li><b>Platform:</b></li>
+            </ul>
+        </td>
+        <td>
+            <table>
+                <tr>
+                    <td valign="top">
+                        <b>{{ to_render['platform_id'] -}}</b>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+<hr/>
+
+<h4>Test summary:</h4>
+<table width="100%" border="0" cellpadding="2" cellspacing="0">
+    <tr bgcolor="#AAFFAA">
+        <th align="left">Number of scenarios</th>
+        {% if 'total_tests' in to_render['test'] -%}
+        <td>{{ to_render['test']['total_tests'] -}}</td>
+        {% else -%}
+        <td>???</td>
+        {% endif -%}
+    </tr>
+    <tr bgcolor="#AAFFAA">
+        <th align="left">Passed</th>
+        {% if 'passed_tests' in to_render['test'] -%}
+        <td>{{ to_render['test']['passed_tests'] -}}</td>
+        {% else -%}
+        <td>???</td>
+        {% endif -%}
+    </tr>
+    {% if 'failed_tests' in to_render['test'] -%}
+        {% if to_render['test']['failed_tests'] == 0 -%}
+    <tr bgcolor="#AAFFAA">
+        <th align="left">Failed</th>
+        <td>{{ to_render['test']['failed_tests'] -}}</td>
+    </tr>
+        {% elif to_render['test']['failed_tests'] > 0 -%}
+    <tr bgcolor="#FFAAAA">
+        <th align="left">Failed</th>
+        <td>{{ to_render['test']['failed_tests'] -}}</td>
+    </tr>
+        {% else -%}
+    <tr bgcolor="#FF33FF">
+        <th align="left">Failed</th>
+        <td><font color="white">???</font></td>
+    </tr>
+        {% endif -%}
+    {% else -%}
+    <tr bgcolor="#FF33FF">
+        <th align="left">Failed</th>
+        <td><font color="white">???</font></td>
+    {% endif -%}
+</table>
+
+<table width="100%" border="1" cellpadding="2" cellspacing="0">
+    {% if to_render['test'] -%}
+        {% for scenario_status, scenario_data in to_render['test']['scenarios'].items() -%}
+            {% for scenario in scenario_data -%}
+                {% if scenario_status == 'ok' -%}
+    <tr>
+        <td align="left" bgcolor="green">{{ scenario -}}</td>
+    </tr>
+                {% elif scenario_status == 'not_ok' -%}
+    <tr>
+        <td align="left" bgcolor="red">{{ scenario -}}</td>
+    </tr>
+                {% elif scenario_status == 'skipped' -%}
+    <tr>
+        <td align="left" bgcolor="blue"><font color="white">{{ scenario -}}</font></td>
+    </tr>
+                {% endif -%}
+            {% endfor -%}
+        {% endfor -%}
+    {% else -%}
+        {% raise "No tests to render!" %}
+    {% endif -%}
+</table>
+</body>
+</html>
+{% endautoescape %}
