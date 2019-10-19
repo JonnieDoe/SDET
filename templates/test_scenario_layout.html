@@ -63,12 +63,14 @@
     </tr>
     <tr>
         <td>
-            <font face="Arial" size="+0">This document contains  <{{ to_render['test_name'].split(".")[0].upper() -}} > summary test results</font>
+            <font face="Arial" size="+0">
+                This document contains  <{{ to_render['test_name'].split(".")[0].upper() -}} > summary test results</font>
         </td>
     </tr>
     <tr>
         <td>
-            <font face="Arial" size="-1">Report generated with: [ {{ to_render['tool'] }}: {{ to_render['tool_version'] }} ]</font>
+            <font face="Arial" size="-1">
+                Report generated with: [ {{ to_render['tool'] }}: {{ to_render['tool_version'] }} ]</font>
         </td>
     </tr>
 </table>
@@ -135,6 +137,8 @@
         <td><font color="white">???</font></td>
     {% endif -%}
 </table>
+
+<hr/>
 
 <table width="100%" border="1" cellpadding="2" cellspacing="0">
     {% if to_render['test'] -%}

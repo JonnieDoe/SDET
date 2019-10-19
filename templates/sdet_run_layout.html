@@ -68,7 +68,8 @@
     </tr>
     <tr>
         <td>
-            <font face="Arial" size="-1">Report generated with: [ {{ to_render['tool'] }}: {{ to_render['tool_version'] }} ]</font>
+            <font face="Arial" size="-1">
+                Report generated with: [ {{ to_render['tool'] }}: {{ to_render['tool_version'] }} ]</font>
         </td>
     </tr>
 </table>
@@ -113,9 +114,11 @@
             {% endif -%}
             {% for platform_id, test_status in test_data['platforms_id']['status'].items() -%}
                 {% if test_status == 'OK' -%}
-        <td align="center" bgcolor="green"><a href="tests_scenario_data/{{ test_name.lower() -}}_{{ platform_id -}}.html">{{ platform_id -}}</a></td>
+        <td align="center" bgcolor="green">
+            <a href="{{ to_render['tests_scenario_dir'] -}}/{{ test_name.lower() -}}_{{ platform_id -}}.html">{{ platform_id -}}</a></td>
                 {% else -%}
-        <td align="center" bgcolor="red"><a href="tests_scenario_data/{{ test_name.lower() -}}_{{ platform_id -}}.html">{{ platform_id -}}</a></td>
+        <td align="center" bgcolor="red">
+            <a href="{{to_render['tests_scenario_dir'] -}}/{{ test_name.lower() -}}_{{ platform_id -}}.html">{{ platform_id -}}</a></td>
                 {% endif -%}
             {% endfor -%}
     </tr>
@@ -129,9 +132,11 @@
             {% endif -%}
             {% for platform_id, test_status in test_data['platforms_id']['status'].items() -%}
                 {% if test_status == 'OK' -%}
-        <td align="center" bgcolor="green"><a href="tests_scenario_data/{{ test_name.lower() -}}_{{ platform_id -}}.html">{{ platform_id -}}</a></td>
+        <td align="center" bgcolor="green">
+            <a href="{{ to_render['tests_scenario_dir'] -}}/{{ test_name.lower() -}}_{{ platform_id -}}.html">{{ platform_id -}}</a></td>
                 {% else -%}
-        <td align="center" bgcolor="red"><a href="tests_scenario_data/{{ test_name.lower() -}}_{{ platform_id -}}.html">{{ platform_id -}}</a></td>
+        <td align="center" bgcolor="red">
+            <a href="{{ to_render['tests_scenario_dir'] -}}/{{ test_name.lower() -}}_{{ platform_id -}}.html">{{ platform_id -}}</a></td>
                 {% endif -%}
             {% endfor -%}
     </tr>

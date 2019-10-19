@@ -58,16 +58,19 @@ import datetime
 import os
 import re
 import shutil
+import sqlite as sql
 import sys
 
 from collections import defaultdict, OrderedDict
 from glob import glob
 from json import dumps, loads
+from time import time
 from traceback import format_exc
 from typing import Union
 # User defined modules
 from const import (
-    OUTPUT_DIR_NAME, TEMPLATES_DIR_NAME, TEST_SCENARIO_DIR, TEST_SCENARIO_TEMPLATE, SDET_TEMPLATE_NAME, SECTION_CONTENT
+    OUTPUT_DIR_NAME, TEMPLATES_DIR_NAME, TEST_SCENARIO_DIR, TEST_SCENARIO_TEMPLATE, SDET_CURRENT_RUN_TEMPLATE_NAME,
+    SDET_MAIN_TEMPLATE_NAME, SECTION_CONTENT, SQLITE_DB
 )
 from helper import Colors
 from jinja_utils import PrintOnConsole, RaiseExtension, SilentUndefined
@@ -163,15 +166,18 @@ class GenerateHTMLUtils(object):
                                                   e.strerror)
             )
             return False
-        except:
+        except:  # noqa: E722
             # Custom error handling
             print(
                 "\tUnknown error when trying to render template '{template}'"
-                "\n\n{err}\n"
-                "\n\tPlease check the context that JINJA2 has to render!"
-                "\n\tContext: {context}".format(
+                "{line_sep}{line_sep{err}{line_sep}"
+                "{line_sep}\tPlease check the context that JINJA2 has to render!"
+                "{line_sep}\tContext: {context}".format(
+                    line_sep=LINE_SEP,
                     template=self.template_environment.get_or_select_template(template_filename),
-                    err=format_exc(), context=dumps(context, indent=8))
+                    err=format_exc(),
+                    context=dumps(context, indent=8)
+                )
             )
             return False
 
@@ -195,24 +201,30 @@ class GenerateHTMLUtils(object):
             return
 
         try:
-            rendered_html = self.render_template(template_filename=html_template, context=context_to_render)
-
+            rendered_html = self.render_template(template_filename=html_template,
+                                                 context=context_to_render)
             if not rendered_html:
-                print("\nError when rendering the template: method returned '{0}'!".format(rendered_html))
+                print(
+                    "{line_sep}Error when rendering the template: method returned '{msg}'!".format(line_sep=LINE_SEP,
+                                                                                                   msg=rendered_html)
+                )
                 return False
 
             try:
                 rendered_html.encode('utf-8')
             except AttributeError:
-                print("\nError when encoding the template with 'utf-8'! Going on without encoding in 'utf-8'")
+                print(
+                    "{line_sep}Error when encoding the template with 'utf-8'! "
+                    "Going on without encoding in 'utf-8'".format(line_sep=LINE_SEP)
+                )
             except Exception as exc_err:
                 print(
-                    "\nUnknown error when encoding the template with 'utf-8'!"
-                    "\nError: {0}"
-                    "\nGoing on without encoding in 'utf-8'".format(exc_err)
+                    "{line_sep}Unknown error when encoding the template with 'utf-8'!"
+                    "{line_sep}Error: {err}"
+                    "{line_sep}Going on without encoding in 'utf-8'".format(line_sep=LINE_SEP, err=exc_err)
                 )
         except Exception as except_err:
-            print("\nError when rendering the template: '{0}'".format(except_err))
+            print("{line_sep}Error when rendering the template: '{err}'".format(line_sep=LINE_SEP, err=except_err))
             return False
 
         html_page = os.path.join(self.output_dir, html_page_name)
@@ -252,15 +264,18 @@ class GenerateHTMLUtils(object):
         report_date = datetime.date.today()
         current_year = datetime.datetime.now().year
 
-        page_title = SECTION_CONTENT.get('html_page_title')
+        page_title = SECTION_CONTENT.get('current_run_html_page_title')
         summary_info_table_header_title = SECTION_CONTENT.get('summary_info_table_header_title')
 
         summary_info_table_header_title = summary_info_table_header_title
         if report_type == 2:
+            page_title = "{0} Summary Test Report".format(input_data_dkt.get('test_name', "").split(".")[0].upper())
             summary_info_table_header_title = "{0} Summary Test Report".format(input_data_dkt.get('test_name', ""))
         if report_type == 3:
-            # TODO: add page name for this report
-            pass
+            page_title = "Product {0} Summary Tests Report".format(input_data_dkt.get('product_name', ""))
+            summary_info_table_header_title = (
+                "Product {0} Summary Tests Report".format(input_data_dkt.get('product_name', ""))
+            )
 
         to_render = {
             'page_title': page_title,
@@ -278,7 +293,8 @@ class GenerateHTMLUtils(object):
             to_render.update(
                 {
                     'all_platforms_id': ", ".join(input_data_dkt.get('all_platforms_id', [])),
-                    'tests': input_data_dkt
+                    'tests': input_data_dkt,
+                    'tests_scenario_dir': 'tests_scenario_data_{id}'.format(id=CONFIG.get('time_stamp', ''))
                 }
             )
 
@@ -291,9 +307,20 @@ class GenerateHTMLUtils(object):
                 }
             )
 
+        if report_type == 3:
+            to_render.update(
+                {
+                    'data': input_data_dkt.get('data', {}),
+                    'product_name': input_data_dkt.get('product_name', "")
+                }
+            )
+
         if debug:
             # ------------------------------- START of context validation ------------------------------- #
-            print("\n{ch}\nValidate the rendering context before sending to JINJA!".format(ch="%" * 80))
+            print(
+                "{line_sep}{ch}\nValidate the rendering context before sending to JINJA!".format(line_sep=LINE_SEP,
+                                                                                                 ch="%" * 80)
+            )
 
             abort_rendering = False
             for key, value in to_render.items():
@@ -305,16 +332,17 @@ class GenerateHTMLUtils(object):
                     abort_rendering = True
 
             print(
-                "\nValidating the context finished with status: '{state}'!\n{ch}\n".format(
+                "{line_sep}Validating the context finished with status: '{state}'!{line_sep}{ch}{line_sep}".format(
+                    line_sep=LINE_SEP,
                     state="OK" if not abort_rendering else "FAILED",
                     ch="%" * 80)
             )
 
             if abort_rendering:
-                print("\nAbort the process of rendering the template!\n")
+                print("{line_sep}Abort the process of rendering the template!{line_sep}".format(line_sep=LINE_SEP))
                 return False
 
-            print("\nAll good in the hood: Start the rendering process!")
+            print("{line_sep}All good in the hood: Start the rendering process!".format(line_sep=LINE_SEP))
             # ------------------------------- END of context validation -------------------------------- #
 
         context_to_render = {
@@ -387,7 +415,7 @@ def set_input_variables(product_name: str = None, test_suites_dir: str = None, r
             "{line_sep}{ch_format}{line_sep}Options as provided by the user{line_sep}".format(line_sep=LINE_SEP,
                                                                                               ch_format=("*" * 80))
         )
-        print(dumps(verbose.get('args'), indent=4))
+        print(dumps(verbose.get('args', {}), indent=4))
         print("{line_sep}{ch_format}{line_sep}".format(line_sep=LINE_SEP, ch_format=("*" * 80)))
 
     if not product_name or not bool(product_name.strip()):
@@ -452,10 +480,10 @@ def set_input_variables(product_name: str = None, test_suites_dir: str = None, r
             "{line_sep}{ch_format}{line_sep}Options after parsing{line_sep}".format(line_sep=LINE_SEP,
                                                                                     ch_format=("*" * 80))
         )
-        print("\tProduct Name\n\t\t{0}".format(CONFIG['product_name']))
-        print("\tReport Type\n\t\t{0}".format(CONFIG['report_type']))
-        print("\tTest_Suites_dir\n\t\t{0}".format(CONFIG['test_suites_dir']))
-        print("\tOutput_dir\n\t\t{0}".format(CONFIG['output_dir']))
+        print("\tProduct Name{line_sep}\t\t{p_n}".format(line_sep=LINE_SEP, p_n=CONFIG['product_name']))
+        print("\tReport Type{line_sep}\t\t{r_t}".format(line_sep=LINE_SEP, r_t=CONFIG['report_type']))
+        print("\tTest_Suites_dir{line_sep}\t\t{ts_dir}".format(line_sep=LINE_SEP, ts_dir=CONFIG['test_suites_dir']))
+        print("\tOutput_dir{line_sep}\t\t{o_dir}".format(line_sep=LINE_SEP, o_dir=CONFIG['output_dir']))
         print("{line_sep}{ch_format}{line_sep}".format(line_sep=LINE_SEP, ch_format=("*" * 80)))
 
 
@@ -589,8 +617,9 @@ def requirement_2(platforms_dkt_data: dict = None, tests_detailed_info_dkt: dict
             platforms_ids = test_values.get('platforms_id', {}).get('status')
 
             for platform_id in platforms_ids:
-                sr_tap = \
+                sr_tap = (
                     platforms_dkt_data.get(test_name, {}).get('platforms_id', {}).get(platform_id, {}).get('sr_tap')
+                )
 
                 total_tests = int(
                     platforms_dkt_data.get(
@@ -652,8 +681,9 @@ def main(docopt_args=None) -> None:
     """
 
     global CONFIG
+    CONFIG['time_stamp'] = int(time())
 
-    # Show banner()
+    # Show the banner()
     banner()
 
     # Parse user input
@@ -703,58 +733,6 @@ def main(docopt_args=None) -> None:
     all_platforms_id = list()
     platforms_dkt_data = OrderedDict()
 
-    # Parse all JSON files
-    for json_file in json_files:
-        path_base_name = os.path.basename(json_file)
-
-        # Remove extension from file name
-        platform_id, _ = os.path.splitext(path_base_name)
-
-        # Get all parsed platform IDs
-        all_platforms_id.append(platform_id)
-
-        # Get data from JSON file
-        platform_tests_data = json_to_dict(json_file=json_file)
-        if not platform_tests_data:
-            print("Could not transform JSON file to dict!")
-            sys.exit(1)
-
-        # Aggregate read data into main dictionary
-        form_main_dkt = aggregate_all_data(tests_dkt=platform_tests_data.get('data', []), main_dkt=platforms_dkt_data)
-        if not form_main_dkt:
-            print(
-                "{line_sep}Could not format main dictionary.{line_sep}Exiting! ...".format(
-                    line_sep=LINE_SEP)
-            )
-            sys.exit(1)
-
-    # ------------------------------------------- Task 1 ------------------------------------------------------------- #
-    tests_status_dkt = defaultdict(dict)
-
-    requirement_1(platforms_dkt_data=platforms_dkt_data, tests_status_dkt=tests_status_dkt)
-    if not tests_status_dkt:
-        print("{line_sep}Could not get status data.{line_sep}Exiting! ...".format(line_sep=LINE_SEP))
-        sys.exit(1)
-
-    # Using OrderedDict() + sorted() sort dictionary by key
-    # Alphabetically sort 'failed' tests
-    tmp_dict = OrderedDict()
-    for key in sorted(tests_status_dkt.get('failed', {})):
-        tmp_dict.update(
-            {key: tests_status_dkt.get('failed', {}).get(key)}
-        )
-    tests_status_dkt['failed'] = tmp_dict
-
-    # Alphabetically sort 'successful' tests
-    tmp_dict = OrderedDict()
-    for key in sorted(tests_status_dkt.get('successful', {})):
-        tmp_dict.update(
-            {key: tests_status_dkt.get('successful', {}).get(key)}
-        )
-    tests_status_dkt['successful'] = tmp_dict
-
-    tests_status_dkt['all_platforms_id'] = all_platforms_id
-
     generate_html = GenerateHTMLUtils(
         template_env=Environment(autoescape=select_autoescape(['html']),
                                  loader=FileSystemLoader(os.path.join(CONFIG['path'], TEMPLATES_DIR_NAME)),
@@ -765,25 +743,113 @@ def main(docopt_args=None) -> None:
         output_dir=CONFIG['output_dir']
     )
 
-    # - Generate HTML5 page
-    status = generate_html.generate_html(html_page_name="SDET_SummaryTestReport.html",
-                                         html_template=SDET_TEMPLATE_NAME,
-                                         input_data_dkt=tests_status_dkt,
-                                         report_type=1,
-                                         debug=True)
-    if status:
-        print(
-            Colors.BOLD + Colors.OKBLUE + "\tSuccessfully generated HTML file!" + Colors.ENDC +
-            Colors.WARNING + "\n\t\tPlease check output directory: '{dir}'".format(dir=CONFIG['output_dir']) +
-            Colors.ENDC
+    # ------------------------------------------- Task 1 ------------------------------------------------------------- #
+    if report_type in [1, 2]:
+        # Parse all JSON files
+        for json_file in json_files:
+            path_base_name = os.path.basename(json_file)
+
+            # Remove extension from file name
+            platform_id, _ = os.path.splitext(path_base_name)
+
+            # Get all parsed platform IDs
+            all_platforms_id.append(platform_id)
+
+            # Get data from JSON file
+            platform_tests_data = json_to_dict(json_file=json_file)
+            if not platform_tests_data:
+                print("Could not transform JSON file to dict!")
+                sys.exit(1)
+
+            # Aggregate read data into main dictionary
+            form_main_dkt = aggregate_all_data(tests_dkt=platform_tests_data.get('data', []),
+                                               main_dkt=platforms_dkt_data)
+            if not form_main_dkt:
+                print(
+                    "{line_sep}Could not format main dictionary.{line_sep}Exiting! ...".format(
+                        line_sep=LINE_SEP)
+                )
+                sys.exit(1)
+
+        tests_status_dkt = defaultdict(dict)
+
+        requirement_1(platforms_dkt_data=platforms_dkt_data, tests_status_dkt=tests_status_dkt)
+        if not tests_status_dkt:
+            print("{line_sep}Could not get status data.{line_sep}Exiting! ...".format(line_sep=LINE_SEP))
+            sys.exit(1)
+
+        # Using OrderedDict() + sorted() sort dictionary by key
+        # Alphabetically sort 'failed' tests
+        tmp_dict = OrderedDict()
+        for key in sorted(tests_status_dkt.get('failed', {})):
+            tmp_dict.update(
+                {key: tests_status_dkt.get('failed', {}).get(key)}
+            )
+        tests_status_dkt['failed'] = tmp_dict
+
+        # Alphabetically sort 'successful' tests
+        tmp_dict = OrderedDict()
+        for key in sorted(tests_status_dkt.get('successful', {})):
+            tmp_dict.update(
+                {key: tests_status_dkt.get('successful', {}).get(key)}
+            )
+        tests_status_dkt['successful'] = tmp_dict
+
+        tests_status_dkt['all_platforms_id'] = all_platforms_id
+
+        # Generate HTML5 page
+        status = generate_html.generate_html(
+            html_page_name="SDET_SummaryTestReport_{id}.html".format(id=CONFIG.get('time_stamp', '')),
+            html_template=SDET_CURRENT_RUN_TEMPLATE_NAME,
+            input_data_dkt=tests_status_dkt,
+            report_type=1,
+            debug=True
         )
-    else:
-        print(Colors.BOLD + Colors.FAIL + "\tNo HTML file generated!" + Colors.ENDC)
-        print("\nExiting! ...")
-        sys.exit(1)
+        if status:
+            print(
+                Colors.BOLD + Colors.OKBLUE + "\tSuccessfully generated HTML file!" + Colors.ENDC +
+                Colors.WARNING + "\n\t\tPlease check output directory: '{dir}'".format(dir=CONFIG['output_dir']) +
+                Colors.ENDC
+            )
+        else:
+            print(Colors.BOLD + Colors.FAIL + "\tNo HTML file generated!" + Colors.ENDC)
+            print("\nExiting! ...")
+            sys.exit(1)
+
+        # Insert current run statistics into SQLite db
+        run_status = "PASSED" if not tests_status_dkt['failed'] else "FAILED"
+
+        all_tests = len(tests_status_dkt['failed']) + len(tests_status_dkt['successful'])
+        failed_tests = len(tests_status_dkt['failed'])
+
+        values_to_insert = (
+            os.path.join(
+                CONFIG['output_dir'], "SDET_SummaryTestReport_{id}.html".format(id=CONFIG.get('time_stamp', ''))),
+            all_tests,
+            failed_tests,
+            ', '.join(all_platforms_id),
+            run_status
+        )
+
+        sqlite_obj = sql.Sqlite(sqlite_file=os.path.join(CONFIG['output_dir'], SQLITE_DB))
+        insert_status = sqlite_obj.insert_into_db(values_to_insert=values_to_insert)
+        if insert_status is False:
+            print(
+                "Error when trying to insert values into database table."
+                "{line_sep}\t{values}".format(line_sep=LINE_SEP, values=values_to_insert)
+            )
+            print("\nExiting! ...")
+            sys.exit(1)
+        elif insert_status is None:
+            print(
+                "Error when trying to insert values into database table."
+                "Function returned 'None'{line_sep}\t{values}".format(line_sep=LINE_SEP, values=values_to_insert)
+            )
+            print("\nExiting! ...")
+            sys.exit(1)
 
     # ------------------------------------------- Task 2 ------------------------------------------------------------- #
-    if report_type in [2, 3]:
+    if report_type == 2:
         req_2 = requirement_2(platforms_dkt_data=platforms_dkt_data, tests_detailed_info_dkt=tests_status_dkt)
         if not req_2:
             print(
@@ -793,7 +859,9 @@ def main(docopt_args=None) -> None:
             sys.exit(1)
 
         # Create the directory if it does not exist
-        tests_scenario_data_dir = os.path.join(CONFIG['output_dir'], TEST_SCENARIO_DIR)
+        tests_scenario_data_dir = os.path.join(
+            CONFIG['output_dir'], TEST_SCENARIO_DIR.format(id=CONFIG.get('time_stamp', ''))
+        )
         if not os.path.isdir(tests_scenario_data_dir):
             os.makedirs(tests_scenario_data_dir)
 
@@ -819,7 +887,7 @@ def main(docopt_args=None) -> None:
                 platforms_status_data = test_values.get('platforms_run_status', {})
 
                 for platform_id, platform_status_data in platforms_status_data.items():
-                    # - Generate HTML5 page
+                    # Generate HTML5 page
                     status = generate_html.generate_html(
                         html_page_name="{f_name}_{platform_id}.html".format(f_name=test_name.lower(),
                                                                             platform_id=platform_id),
@@ -838,19 +906,55 @@ def main(docopt_args=None) -> None:
                         )
 
     # ------------------------------------------- Task 3 ------------------------------------------------------------- #
-    # TODO: Implement Task 3
-    # Set new output path
     if report_type == 3:
+        sqlite_obj = sql.Sqlite(sqlite_file=os.path.join(CONFIG['output_dir'], SQLITE_DB))
+        # Form the SQL query
+        sql_query = "SELECT * FROM SDET"
+        # Fetch data from SQL table
+        db_data = sqlite_obj.query_db(sql_query=sql_query)
+        data_to_render = dict()
+        if not db_data:
+            print("Could not fetch data from SQLite DB!")
+
+        for db_entry in db_data:
+            entry_id = db_entry[0]
+
+            data_to_render.update(
+                {
+                    entry_id: {
+                        'detailed_info': db_entry[1],
+                        'executed_tests': db_entry[2],
+                        'failed_testes': db_entry[3],
+                        'platforms_ids': db_entry[4],
+                        'status': db_entry[5]
+                    }
+                }
+            )
+
+        # Set new output path
         generate_html.output_dir = CONFIG['output_dir']
+
+        # Generate HTML5 page
+        status = generate_html.generate_html(
+            html_page_name="Product_{product}_summary_test_results.html".format(product=product_name),
+            html_template=SDET_MAIN_TEMPLATE_NAME,
+            input_data_dkt={
+                'data': data_to_render,
+                'product_name': product_name
+            },
+            report_type=3
+        )
+        if not status:
+            print(Colors.BOLD + Colors.FAIL + "\tNo HTML file generated!" + Colors.ENDC)
+            print("\nExiting! ...")
+            sys.exit(1)
 
     # ------------------------------------------- DEBUG -------------------------------------------------------------- #
     if debug:
-        # JIRA_UPDATER-75
-        # 3336531
-        # jira_savapi-433.py_42628.html
         import pprint
+
         pp = pprint.PrettyPrinter(indent=4)
-        # pp.pprint(platforms_dkt_data)
+        pp.pprint(platforms_dkt_data)
         pp.pprint(tests_status_dkt)
 
 
